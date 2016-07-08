@@ -1,0 +1,3 @@
+[submodule "PyInotify"]
+	path = PyInotify
+	url = git@github.com:dsoprea/PyInotify.git
