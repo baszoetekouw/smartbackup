@@ -125,8 +125,10 @@ def find_backups(name):
 	for bu_dir in bu_dirs:
 		try:
 			dt = get_stamp(bu_dir)
-		except:
-			_LOGGER.info("Couldn't open stamp in dir `%s'", bu_dir)
+		except OSError as e:
+			_LOGGER.info("Couldn't open stamp in dir `%s': %s", bu_dir, e.strerror)
+		except AssertionError:
+			_LOGGER.info("Invalid timestamp in dir `%s'", bu_dir)
 		else:
 			prev_backups.append([ bu_dir, dt ])
 
