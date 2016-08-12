@@ -97,16 +97,16 @@ def parse_period(string):
 
 
 def get_stamp(stampdir):
-	stampfile = os.path.join(stampdir,'stamp')
+	stampfile = os.path.join(stampdir, 'stamp')
 
 	# read first line of stamp file
-	f = open(stampfile,mode='rt')
-	line = f.readline()
+	with open(stampfile, mode='rt') as f:
+		line = f.readline()
 	f.close()
 
 	# extract timestamp (first field of line) and compare to others
-	stamp = int( line.split().pop(0) )
-	assert(stamp>0)
+	stamp = int(line.split().pop(0))
+	assert (stamp > 0)
 
 	dt = datetime.utcfromtimestamp(stamp)
 	return dt
@@ -118,7 +118,7 @@ def find_backups(name):
 
 	_LOGGER.info("Found existing backup dirs: %s", bu_dirs)
 
-	prev_backups = []
+	prev_backups = [ ]
 
 	# time of each backup is held in a file called "stamp"
 	# its first line has a first field with a unix timestamp
@@ -128,10 +128,10 @@ def find_backups(name):
 		except:
 			_LOGGER.info("Couldn't open stamp in dir `%s'", bu_dir)
 		else:
-			prev_backups.append([bu_dir,dt])
+			prev_backups.append([ bu_dir, dt ])
 
 	# sort by age
-	prev_backups.sort(key=lambda backup: backup[1])
+	prev_backups.sort(key=lambda backup: backup[ 1 ])
 
 	return prev_backups
 
@@ -151,15 +151,15 @@ def new_backup(path):
 
 	# copy newly synced dir to backups
 	dt = get_stamp(synced_path)
-    # TODO: iets met timezones.  otherwise, will use utc 
-	timestr = dt.strftime('%Y-%m-%d_%H:%M') 
-	new_backup = os.path.join( BU_BACKUP_DIR, bu_name, timestr )
-	if os.path.exists(new_backup):
-		raise BackupError("Destination path `%s' already exists, refusing to overwrite" % new_backup)
+	# TODO: iets met timezones.  otherwise, will use utc
+	timestr = dt.strftime('%Y-%m-%d_%H:%M')
+	new_backup_dir = os.path.join(BU_BACKUP_DIR, bu_name, timestr)
+	if os.path.exists(new_backup_dir):
+		raise BackupError("Destination path `%s' already exists, refusing to overwrite" % new_backup_dir)
 
-	_LOGGER.info("Copying `%s' to `%s'", synced_path, new_backup)
-	#shutil.copytree(synced_path, new_backup, copy_function=os.link)
-	subprocess.run(["/bin/cp","-al", synced_path, new_backup])
+	_LOGGER.info("Copying `%s' to `%s'", synced_path, new_backup_dir)
+	# shutil.copytree(synced_path, new_backup, copy_function=os.link)
+	subprocess.run([ "/bin/cp", "-al", synced_path, new_backup_dir ])
 	_LOGGER.info("Done")
 
 	#backups = find_backups(bu_name)
@@ -167,6 +167,7 @@ def new_backup(path):
 
 
 	return
+
 
 def _configure_logging():
 	_LOGGER.setLevel(logging.DEBUG)
@@ -178,35 +179,39 @@ def _configure_logging():
 
 	_LOGGER.addHandler(ch)
 
+
 def _main():
+	prune_backups("miranda",SCHEDULE)
+	sys.exit(0)
+
 	# set nice and ionice for current process
 	os.setpriority(os.PRIO_PROCESS, 0, 10)
 	p = psutil.Process(os.getpid())
 	p.ionice(psutil.IOPRIO_CLASS_IDLE)
 
-
-
 	i = inotify.adapters.Inotify()
 
-	d = os.path.join(BU_SYNC_DIR,'miranda')
+	d = os.path.join(BU_SYNC_DIR, 'miranda')
 
-	i.add_watch( d.encode('utf-8') )
+	i.add_watch(d.encode('utf-8'))
 
 	try:
 		for event in i.event_gen():
-			if event is None: continue
+			if event is None:
+				continue
 
 			(header, type_names, watch_path, filename) = event
 			watch_path = watch_path.decode('utf-8')
-			filename   = filename.decode('utf-8')
-			if filename != 'stamp': continue
+			filename = filename.decode('utf-8')
+			if filename != 'stamp':
+				continue
 
-			if header.mask & (inotify.constants.IN_MOVED_TO|inotify.constants.IN_CLOSE_WRITE):
+			if header.mask & (inotify.constants.IN_MOVED_TO | inotify.constants.IN_CLOSE_WRITE):
 				# only got here if a backup just finished
 				_LOGGER.info("WD=(%d) MASK=(%d) COOKIE=(%d) LEN=(%d) MASK->NAMES=%s "
-					"WATCH-PATH=[%s] FILENAME=[%s]",
-					header.wd, header.mask, header.cookie, header.len, type_names,
-					watch_path, filename)
+				             "WATCH-PATH=[%s] FILENAME=[%s]",
+				             header.wd, header.mask, header.cookie, header.len, type_names,
+				             watch_path, filename)
 				try:
 					new_backup(watch_path)
 				except BackupError as e:
@@ -214,6 +219,7 @@ def _main():
 
 	finally:
 		i.remove_watch(d)
+
 
 if __name__ == '__main__':
 	_configure_logging()
