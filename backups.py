@@ -1,71 +1,85 @@
 #!/usr/bin/env python3.5
 
+import sys
+
+if sys.version_info[ 0 ] != 3 or sys.version_info[ 1 ] < 5:
+	print("This script requires Python version 3.5")
+	sys.exit(1)
+
 import logging
 import inotify.adapters
+import inotify.constants
 import os.path
 import os
 import glob
-import shutil
 import subprocess
-import re
-import sys
+import operator
 import psutil
 from datetime import datetime, timedelta
 from pprint import pprint
 
-BU_SYNC_DIR   = "/data/Backup/Sync"
+BU_SYNC_DIR = "/data/Backup/Sync"
 BU_BACKUP_DIR = "/data/Backup/Backups"
-BU_FREQUENCY  = 3550
+BU_FREQUENCY = 3550
 
-#_DEFAULT_LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+# _DEFAULT_LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 _DEFAULT_LOG_FORMAT = '%(asctime)s [%(levelname)s] %(message)s'
 
 _LOGGER = logging.getLogger(__name__)
 
 SCHEDULE = [
-	{ 'delta': '1h', 'approx': '10m', 'duration': '1D' },
-	{ 'delta': '2h', 'approx': '10m', 'duration': '1W' },
-	{ 'delta': '1D', 'approx':  '4h', 'duration': '1M' },
-	{ 'delta': '1W', 'approx':  '1D', 'duration': '6M' },
-	{ 'delta': '1M', 'approx':  '2D', 'duration': '2Y' },
-	{ 'delta': '6M', 'approx':  '2W', 'duration': '5Y' },
+	{'delta': '1h', 'approx': '10m', 'duration': '1D'},
+	{'delta': '2h', 'approx': '10m', 'duration': '1W'},
+	{'delta': '1D', 'approx': '4h',  'duration': '1M'},
+	{'delta': '1W', 'approx': '1D',  'duration': '6M'},
+	{'delta': '1M', 'approx': '2D',  'duration': '2Y'},
+	{'delta': '6M', 'approx': '2W',  'duration': '5Y'},
 ]
 
 TIMESPECS = {
 	's': 1,
 	'm': 60,
-	'h': 60*60,
-	'D': 24*60*60,
-	'W': 7*24*60*60,
-	'M': 730*60*60,
-	'Q': 2190*60*60,
-	'Y': 365*24*60*60,
+	'h': 60 * 60,
+	'D': 24 * 60 * 60,
+	'W': 7 * 24 * 60 * 60,
+	'M': 730 * 60 * 60,
+	'Q': 2190 * 60 * 60,
+	'Y': 365 * 24 * 60 * 60,
 }
 
+
 class BackupError(Exception):
-	def __init__(self,message):
+	def __init__(self, message):
 		self.msg = message
+
 	def __str__(self):
 		return self.msg
 
-def schedule2time(schedule):
-	times = []
-	now = datetime.utcnow()
-	delta_prev = timedelta(0)
-	for s in schedule:
-		delta  = parse_period(s['delta'])
+
+def schedule2time(schedule_descr):
+	# first parse the schedule description to proper timedelta objects
+	schedule = [ ]
+	for s in schedule_descr:
+		delta = parse_period(s['delta'])
 		period = parse_period(s['duration'])
 		approx = parse_period(s['approx'])
+		schedule.append(dict(period=period, delta=delta, approx=approx))
 
-		start = now + delta_prev
-		end   = start + period
+	# sort the schedule by period (shorted first)
+	schedule = sorted(schedule, key=operator.itemgetter('period'))
 
-		times.append([start,end,delta])
+	# calculate start and end times for each interval
+	now = datetime.utcnow().replace(microsecond=0)
+	prev_start = now
+	for s in schedule:
+		start = now - s['period']
+		end = prev_start
+		prev_start = start
 
-		delta_prev = delta
+		s['start'] = start
+		s['end']   = end
 
-
-
+	return schedule
 
 
 def parse_period(string):
@@ -73,24 +87,23 @@ def parse_period(string):
 	digits = ''
 
 	# get numerical prefix
-	i=0
-	while i<len(sl):
-		if sl[i].isspace(): 
-			next
-		if sl[i].isdigit():
-			digits.append(sl[i])
+	for i in range(0,len(sl)):
+		if sl[ i ].isspace():
+			continue
+		if sl[ i ].isdigit():
+			digits = digits + sl[ i ]
 		else:
 			break
-	
-	# only digits in the string without sepcifier, assume seconds
-	if i==len(sl):
+
+	# only digits in the string without specifier, assume seconds
+	if i == len(sl):
 		timespec = 's'
 	else:
-		timespec = sl[i]
-		if not timespec in TIMESPECS.keys():
+		timespec = sl[ i ]
+		if timespec not in TIMESPECS.keys():
 			raise TypeError('No time sprecifier specified')
-	
-	sec = int(digits) * TIMESPEC[timespec]
+
+	sec = int(digits) * TIMESPECS[ timespec ]
 	delta = timedelta(seconds=sec)
 
 	return delta
@@ -138,10 +151,10 @@ def find_backups(name):
 	return prev_backups
 
 
-def prune_backups(backups,schedule):
-	pprint(backups)
-	times = schedule2time(schedule)
-
+def prune_backups(bu_name, schedule_desc):
+	backups = find_backups(bu_name)
+	schedule = schedule2time(schedule_desc)
+	pprint(schedule)
 
 
 def new_backup(path):
