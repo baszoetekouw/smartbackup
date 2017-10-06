@@ -1,0 +1,9 @@
+[Unit]
+Description=SmartBackup Pruning
+
+[Service]
+User=root
+Group=root
+Type=oneshot
+ExecStart=/srv/backup/env/bin/python /srv/backup/smartbackup/backups.py --prune
+

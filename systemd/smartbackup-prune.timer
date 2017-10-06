@@ -1,0 +1,12 @@
+[Unit]
+Description=SmartBackup Pruning
+After=syslog.target
+
+[Timer]
+OnCalendar=*-*-* 04:00:00
+RandomizedDelaySec=5m
+Persistent=true
+
+[Install]
+WantedBy=multi-user.target
+
