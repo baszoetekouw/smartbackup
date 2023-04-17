@@ -1,2 +1,2 @@
 inotify==0.2.8
-psutil==5.3.1
+psutil==5.6.6
