@@ -31,7 +31,7 @@ BU_BACKUP_DIR = "/data/Backup/Backups"
 BU_NAMES      = ('regan','miranda')
 
 SCHEDULE = [
-	{ 'delta': '1h', 'period':  '1D' },
+	{ 'delta': '1h', 'period':  '2D' },
 	{ 'delta': '2h', 'period':  '1W' },
 	{ 'delta': '1D', 'period':  '1M' },
 	{ 'delta': '1W', 'period':  '6M' },
@@ -227,7 +227,7 @@ def backups_find_prune(times,backups):
 	backup['status'] = 'Keep'
 	backup['age'] = timedelta(0)
 	backup['gap'] = timedelta(0)
-	print("  backup from {timestamp} (age={age}, gap={gap}): {status} ".format(**backup) )
+	print("  backup from {timestamp} (age=  0.00, gap={gap!s:>18}): {status} ".format(**backup) )
 
 	# initialize counts etc
 	intervals_iterator = iter(intervals)
@@ -275,6 +275,7 @@ def backups_find_prune(times,backups):
 				# backup is too far away from ideal point
 				backup['status'] = 'Prune'
 
+			#print("  backup from {timestamp} (age={relage:6.2f}, gap={gap!s:>18s}): {status} ".format(**backup) )
 			print("  backup from {timestamp} (age={relage:6.2f}, gap={gap}): {status} ".format(**backup) )
 			b=b+1
 	except StopIteration:
@@ -317,6 +318,16 @@ def run_prune(schedule,machine):
 		if not b['status']=='Keep':
 			print("Moving backup `{backup}' to old".format(**b))
 			shutil.move(b['backup'], olddir)
+
+	for b in backups:
+		if not b['status']=='Keep':
+			oldname = os.path.join(olddir,os.path.basename(b['backup']))
+			oldname = os.path.realpath(oldname)
+			# supersafe extra check
+			if os.path.commonprefix([oldname,"/data/Backup/Backups/_old"])!="/data/Backup/Backups/_old":
+				raise Exception("ERRORTJE!")
+			print("Removing backup `{}' from old".format(oldname))
+			shutil.rmtree(oldname)
 
 	print()
 
